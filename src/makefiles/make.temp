@@ -1,0 +1,72 @@
+
+
+CC              := gcc
+LD              := ld
+SRC_DIR         := src
+DRIVER_DIR      := src/driver
+BUILD_DIR       := bin
+OUT_DIR         := bin
+OVMF_DIR 		:= ../OVMFbin
+LINUX_HEADERS	= /usr/src/sys/build
+# CPPFLAGS		+= 
+
+ARCH            = $(shell uname -m | sed s,i[3456789]86,ia32,)
+
+NAME            := NesUEFI
+SOURCES         := $(wildcard $(SRC_DIR)/**/*.c) $(wildcard $(SRC_DIR)/*.c)
+OBJS            := $(patsubst $(SRC_DIR)/%.c, $(OUT_DIR)/%.o, $(SOURCES))
+TARGET_LIB      := $(OUT_DIR)/$(NAME).so
+TARGET          := $(OUT_DIR)/$(NAME).efi
+
+EFIINC          = /usr/local/include/efi
+EFIINCS         = -I$(EFIINC) -I$(EFIINC)/$(ARCH) -I$(EFIINC)/protocol
+LIB             = /usr/local/lib
+EFILIB          = /usr/local/lib
+EFI_CRT_OBJS    := $(EFILIB)/crt0-efi-$(ARCH).o
+EFI_LDS         := $(EFILIB)/elf_$(ARCH)_efi.lds
+
+INCLUDE         := -I$(SRC_DIR) -I$(DRIVER_DIR)
+CFLAGS          = $(INCLUDE) $(EFIINCS) -fno-stack-protector -ffreestanding -fpic \
+	-fshort-wchar -mno-red-zone -Wall -D__KERNEL__ -I$(LINUX_HEADERS)/include
+ifeq ($(ARCH),x86_64)
+  CFLAGS += -DEFI_FUNCTION_WRAPPER
+endif
+
+LDFLAGS         = -nostdlib -znocombreloc -T $(EFI_LDS) -shared \
+	-Bsymbolic -L $(EFILIB) -L $(LIB) $(EFI_CRT_OBJS)
+
+
+
+all: $(TARGET)
+
+$(TARGET): $(TARGET_LIB)
+	@mkdir -p "$(@D)"
+	objcopy -j .text -j .sdata -j .data -j .dynamic \
+		-j .dynsym  -j .rel -j .rela -j .reloc \
+		--target=efi-app-$(ARCH) $^ $@
+
+$(TARGET_LIB): $(OBJS)
+	$(LD) $(LDFLAGS) $(OBJS) -o $@ -lefi -lgnuefi
+
+$(OUT_DIR)/%.o: $(SRC_DIR)/%.c
+	@mkdir -p "$(@D)"
+	$(CC) $(CFLAGS) -c $< -o $@
+
+clean:
+	$(RM) -r  $(OUT_DIR)/
+
+buildimg:
+	dd if=/dev/zero of=$(OUT_DIR)/$(NAME).img bs=512 count=93750
+	mformat -i $(OUT_DIR)/$(NAME).img -f 1440 ::
+	mmd -i $(OUT_DIR)/$(NAME).img ::/EFI
+	mmd -i $(OUT_DIR)/$(NAME).img ::/EFI/BOOT
+	mcopy -i $(OUT_DIR)/$(NAME).img $(OUT_DIR)/$(NAME).efi ::/EFI/BOOT
+	mcopy -i $(OUT_DIR)/$(NAME).img startup.nsh ::
+
+run:
+	qemu-system-x86_64 -drive format=raw,file=$(OUT_DIR)/$(NAME).img -m 256M -cpu qemu64 -drive if=pflash,format=raw,unit=0,file="$(OVMF_DIR)/OVMF_CODE-pure-efi.fd",readonly=on -drive if=pflash,format=raw,unit=1,file="$(OVMF_DIR)/OVMF_VARS-pure-efi.fd" -net none
+
+
+
+.PHONY: clean all
+.SECONDARY: $(OBJS)
