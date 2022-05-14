@@ -1,5 +1,5 @@
 # BareMetalNes
-A NES Emulator running on x86 CPU without an OS. The emulator part is a port of [LiteNES](https://github.com/NJU-ProjectN/LiteNES) and the low level drivers are taken from amazing [Tetris OS](https://www.youtube.com/watch?v=FaILnmUYS_U) by [jdh](https://github.com/jdah). 
+A bootable NES Emulator running on x86 CPU without an OS. The emulator part is a port of [LiteNES](https://github.com/NJU-ProjectN/LiteNES) and the low level drivers are taken from amazing [Tetris OS](https://www.youtube.com/watch?v=FaILnmUYS_U) by [jdh](https://github.com/jdah). 
 
 ## Compile 
     make
